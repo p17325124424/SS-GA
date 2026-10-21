@@ -565,6 +565,24 @@ export async function saveRecordToCloud(targetUserId: string, record: BrushingRe
   }
 }
 
+// Fetch single user profile from Cloud Firestore
+export async function fetchUserProfileFromCloud(targetUserId: string): Promise<CloudUserProfile | null> {
+  await ensureAuthSession();
+
+  const userRef = doc(db, 'users', targetUserId);
+  const path = `users/${targetUserId}`;
+
+  try {
+    const snap = await getDoc(userRef);
+    if (!snap.exists()) {
+      return null;
+    }
+    return snap.data() as CloudUserProfile;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.GET, path);
+  }
+}
+
 // Fetch all daily records for user
 export async function fetchUserRecordsFromCloud(targetUserId: string): Promise<Record<string, BrushingRecord>> {
   await ensureAuthSession();

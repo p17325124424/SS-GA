@@ -27,6 +27,7 @@ import {
   saveUserStatsToCloud, 
   saveRecordToCloud,
   fetchUserRecordsFromCloud,
+  fetchUserProfileFromCloud,
   CloudUserProfile,
   SUPER_ADMIN_EMAIL,
   PRESET_PLAYER_ACCOUNT,
@@ -110,7 +111,7 @@ export default function App() {
 
   // Check if current user is Super Admin (Only p17325124424@student.poltekkesbandung.ac.id)
   const isSuper = isUserSuperAdmin(user, cloudProfile);
-  const isPlayer = activeAccountType === 'ssga01' || cloudProfile?.userId === 'ssga01';
+  const isPlayer = (Boolean(activeAccountType) && activeAccountType !== 'admin') || (Boolean(cloudProfile) && cloudProfile?.role === 'user');
 
   // Active equipped toothbrush
   const toothbrushes = Storage.getToothbrushes();
@@ -187,20 +188,41 @@ export default function App() {
         if (savedAccount && savedAccount !== 'admin') {
           setActiveAccountType(savedAccount);
           try {
+            // Fetch remote profile from Firestore (users/ssga01 or users/player_...)
+            const remoteProfile = await fetchUserProfileFromCloud(savedAccount);
             const cloudRecords = await fetchUserRecordsFromCloud(savedAccount);
             const today = getTodayKey();
             const localStats = Storage.getStats();
-            if (cloudRecords[today]) {
+
+            if (remoteProfile) {
+              setCloudProfile(remoteProfile);
+              localStats.currentStreak = remoteProfile.currentStreak ?? localStats.currentStreak;
+              localStats.bestStreak = Math.max(remoteProfile.bestStreak ?? 0, localStats.bestStreak);
+              localStats.totalStars = Math.max(remoteProfile.totalStars ?? 0, localStats.totalStars);
+              localStats.totalSessions = Math.max(remoteProfile.totalSessions ?? 0, localStats.totalSessions);
+              localStats.selectedToothbrushId = remoteProfile.selectedToothbrushId || localStats.selectedToothbrushId;
+              if (remoteProfile.hasPassedQuiz) {
+                localStats.hasPassedQuiz = true;
+                localStats.quizScore = remoteProfile.quizScore ?? localStats.quizScore;
+              }
+              if (remoteProfile.hasReadEducation) {
+                localStats.hasReadEducation = true;
+              }
+            }
+
+            if (cloudRecords && cloudRecords[today]) {
               localStats.todayRecords = {
                 morning: cloudRecords[today].morning,
                 night: cloudRecords[today].night,
               };
             }
-            Object.values(cloudRecords).forEach((rec) => Storage.saveRecord(rec));
+            if (cloudRecords) {
+              Object.values(cloudRecords).forEach((rec) => Storage.saveRecord(rec));
+            }
             setStats({ ...localStats });
             Storage.saveStats(localStats);
           } catch (err) {
-            console.warn(err);
+            console.warn('Sync on session restore warning:', err);
           }
         }
       } catch (err) {
@@ -215,7 +237,8 @@ export default function App() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
-      if (firebaseUser && activeAccountType !== 'ssga01') {
+      // Only process Google/Admin accounts, ignore anonymous auth used for player Firestore access
+      if (firebaseUser && !firebaseUser.isAnonymous && (!activeAccountType || activeAccountType === 'admin' || activeAccountType === 'google')) {
         try {
           const currentLocalStats = Storage.getStats();
           const profile = await syncUserProfile(firebaseUser, currentLocalStats);
@@ -336,6 +359,52 @@ export default function App() {
     } catch (err: any) {
       console.error('Failed player login:', err);
       setAuthErrorMessage(err.message || 'Gagal masuk. Silakan periksa kembali nama pengguna dan kata sandi.');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  // Quick Login directly as ssga01 (as requested by user)
+  const handleQuickLoginSsga01 = async () => {
+    setIsLoggingIn(true);
+    setAuthErrorMessage(null);
+    try {
+      const profile = await loginAsPlayerAccount('ssga01', '12345', stats);
+      setCloudProfile(profile);
+      setActiveAccountType('ssga01');
+
+      try {
+        const cloudRecords = await fetchUserRecordsFromCloud('ssga01');
+        const today = getTodayKey();
+        const userCloudStats: UserStats = {
+          currentStreak: profile.currentStreak ?? 0,
+          bestStreak: profile.bestStreak ?? 0,
+          totalStars: profile.totalStars ?? 50,
+          totalSessions: profile.totalSessions ?? 0,
+          selectedToothbrushId: profile.selectedToothbrushId || 'classic-blue',
+          lastBrushedDate: profile.lastBrushedDate || undefined,
+          hasReadEducation: profile.hasReadEducation ?? false,
+          lastReadEducationAt: profile.lastReadEducationAt || undefined,
+          hasPassedQuiz: profile.hasPassedQuiz ?? false,
+          quizScore: profile.quizScore ?? undefined,
+          todayRecords: {
+            morning: cloudRecords[today]?.morning ?? false,
+            night: cloudRecords[today]?.night ?? false,
+          },
+        };
+        Object.values(cloudRecords).forEach((rec) => Storage.saveRecord(rec));
+        setStats(userCloudStats);
+        Storage.saveStats(userCloudStats);
+      } catch (recErr) {
+        console.warn(recErr);
+      }
+
+      setIsEmailModalOpen(false);
+      setSyncToastMessage('🎮 Berhasil masuk sebagai ssga01! Data sikat gigi tersimpan di Cloud Firestore.');
+      setTimeout(() => setSyncToastMessage(null), 4000);
+    } catch (err: any) {
+      console.error('Failed quick login ssga01:', err);
+      setAuthErrorMessage(err.message || 'Gagal masuk sebagai ssga01.');
     } finally {
       setIsLoggingIn(false);
     }
@@ -669,7 +738,7 @@ export default function App() {
                     🎮
                   </div>
                   <span className="font-display font-bold max-w-[100px] truncate">
-                    {cloudProfile?.displayName || playerUsername || 'Pemain'}
+                    {cloudProfile?.displayName || (activeAccountType === 'ssga01' ? 'ssga01' : activeAccountType?.replace('player_', '') || playerUsername || 'ssga01')}
                   </span>
                   <Database className="w-3.5 h-3.5 text-blue-600" />
                 </button>
@@ -679,7 +748,7 @@ export default function App() {
                   <div className="absolute right-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-sky-100 p-3.5 z-50 text-left animate-in fade-in zoom-in-95 duration-150">
                     <div className="pb-2.5 mb-2 border-b border-slate-100">
                       <div className="font-bold text-xs text-slate-900">
-                        Akun Pemain: {cloudProfile?.displayName || playerUsername || 'Pemain'}
+                        Akun Pemain: {cloudProfile?.displayName || (activeAccountType === 'ssga01' ? 'ssga01' : activeAccountType?.replace('player_', '') || playerUsername || 'ssga01')}
                       </div>
                       <div className="mt-1 text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100 flex items-center gap-1.5">
                         <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
@@ -961,8 +1030,29 @@ export default function App() {
               </div>
             )}
 
+            {/* Tombol Akses Cepat ssga01 (Permintaan Pengguna) */}
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={handleQuickLoginSsga01}
+                disabled={isLoggingIn}
+                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-500 via-teal-500 to-sky-600 hover:from-emerald-600 hover:to-sky-700 text-white font-display font-bold text-xs shadow-md transition cursor-pointer active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 border border-emerald-400"
+              >
+                <Sparkles className="w-4 h-4 text-amber-200 fill-amber-200" />
+                <span>Masuk sebagai ssga01</span>
+              </button>
+            </div>
+
+            <div className="relative flex py-2 items-center my-1">
+              <div className="flex-grow border-t border-slate-200"></div>
+              <span className="flex-shrink mx-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                Atau Masuk dengan Nama Pengguna
+              </span>
+              <div className="flex-grow border-t border-slate-200"></div>
+            </div>
+
             {/* Form Login Pemain */}
-            <form onSubmit={handlePlayerLogin} className="mt-4 space-y-3.5 text-left">
+            <form onSubmit={handlePlayerLogin} className="space-y-3.5 text-left">
               <div>
                 <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
                   Nama Pengguna
