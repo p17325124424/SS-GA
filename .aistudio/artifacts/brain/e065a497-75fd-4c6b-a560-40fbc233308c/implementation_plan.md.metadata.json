@@ -1,0 +1,6 @@
+{
+  "summary":  "Rencana implementasi telah diperbarui untuk memastikan:\n1. Tidak ada contoh password sama sekali di UI maupun placeholder (hanya field berlabel 'Kata Sandi').\n2. Kolom input berlabel dan ber-placeholder murni 'Nama Pengguna' (tanpa teks ssga01/nama anak).\n3. Tombol dan identitas Super Admin p17325124424 disembunyikan sepenuhnya dari publik, hanya muncul otomatis setelah login email admin.",
+  "updatedAt":  "2026-10-21T18:08:21.511439779Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}

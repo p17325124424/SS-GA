@@ -1,0 +1,110 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global Safety Net: default-deny catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email != null && request.auth.token.email == 'p17325124424@student.poltekkesbandung.ac.id') ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && (
+        request.auth.uid == userId ||
+        userId == 'ssga01' ||
+        userId.matches('^player_[a-zA-Z0-9_\\-]+$')
+      );
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll(['userId', 'email', 'role', 'currentStreak', 'bestStreak', 'totalStars', 'totalSessions', 'selectedToothbrushId']) &&
+             data.userId is string && data.userId.size() <= 128 &&
+             data.email is string && data.email.size() <= 256 &&
+             data.role in ['user', 'superadmin'] &&
+             data.currentStreak is number && data.currentStreak >= 0 &&
+             data.bestStreak is number && data.bestStreak >= 0 &&
+             data.totalStars is number && data.totalStars >= 0 &&
+             data.totalSessions is number && data.totalSessions >= 0 &&
+             data.selectedToothbrushId is string && data.selectedToothbrushId.size() <= 64 &&
+             (!('username' in data) || (data.username is string && data.username.size() <= 64)) &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() <= 128)) &&
+             (!('photoURL' in data) || (data.photoURL is string && data.photoURL.size() <= 512)) &&
+             (!('lastBrushedDate' in data) || (data.lastBrushedDate is string && data.lastBrushedDate.size() <= 32)) &&
+             (!('hasReadEducation' in data) || data.hasReadEducation is bool) &&
+             (!('lastReadEducationAt' in data) || (data.lastReadEducationAt is string && data.lastReadEducationAt.size() <= 64)) &&
+             (!('hasPassedQuiz' in data) || data.hasPassedQuiz is bool) &&
+             (!('quizScore' in data) || (data.quizScore is number && data.quizScore >= 0)) &&
+             (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 64)) &&
+             (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
+    }
+
+    function isValidBrushingRecord(data) {
+      return data.keys().hasAll(['date', 'morning', 'night', 'durationSeconds', 'starsEarned', 'userId']) &&
+             data.date is string && data.date.size() <= 32 &&
+             data.morning is bool &&
+             data.night is bool &&
+             data.durationSeconds is number && data.durationSeconds >= 0 &&
+             data.starsEarned is number && data.starsEarned >= 0 &&
+             data.userId is string && data.userId.size() <= 128 &&
+             (!('morningTime' in data) || (data.morningTime is string && data.morningTime.size() <= 32)) &&
+             (!('nightTime' in data) || (data.nightTime is string && data.nightTime.size() <= 32)) &&
+             (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 64));
+    }
+
+    // User Profile & Aggregate Stats
+    // Management restricted strictly to owner or super admin (p17325124424@student.poltekkesbandung.ac.id)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isSuperAdmin());
+      allow list: if isSuperAdmin();
+      allow create: if isValidId(userId) &&
+                       (isOwner(userId) || isSuperAdmin()) &&
+                       isValidUserProfile(incoming()) &&
+                       (incoming().userId == request.auth.uid || incoming().userId == userId || isSuperAdmin()) &&
+                       (incoming().role == 'user' || isSuperAdmin());
+      allow update: if isValidId(userId) && (
+        (isOwner(userId) && isValidUserProfile(incoming()) &&
+         incoming().userId == existing().userId &&
+         (incoming().role == existing().role || isSuperAdmin())) ||
+        isSuperAdmin()
+      );
+      allow delete: if isValidId(userId) && isSuperAdmin();
+
+      // Daily Brushing Records Subcollection
+      match /records/{recordDate} {
+        allow get, list: if isValidId(userId) && (isOwner(userId) || isSuperAdmin());
+        allow create, update: if isValidId(userId) && isValidId(recordDate) &&
+                                 isValidBrushingRecord(incoming()) &&
+                                 (isOwner(userId) || isSuperAdmin()) &&
+                                 incoming().userId == userId;
+        allow delete: if isValidId(userId) && isValidId(recordDate) && (isOwner(userId) || isSuperAdmin());
+      }
+    }
+
+    // Admin Registry
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+  }
+}

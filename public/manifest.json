@@ -1,0 +1,33 @@
+{
+  "id": "/",
+  "name": "GigiJuara - Edukasi & Pengingat Sikat Gigi",
+  "short_name": "GigiJuara",
+  "description": "Game edukasi sikat gigi 2 menit interaktif, pengingat sikat gigi offline 2x sehari, streak tracker & reward anak ceria.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f0f9ff",
+  "theme_color": "#38bdf8",
+  "categories": ["education", "health", "games", "lifestyle"],
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

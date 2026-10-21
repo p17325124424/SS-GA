@@ -1,0 +1,72 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile, role, education read status, and brushing statistics for each account (including player account ssga01 and super admin)",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID or player account ID (e.g. ssga01)" },
+        "email": { "type": "string", "description": "User email address" },
+        "username": { "type": "string", "description": "Player username e.g. ssga01" },
+        "displayName": { "type": "string", "description": "Display name of user or child" },
+        "photoURL": { "type": "string", "description": "User avatar URL" },
+        "role": { "type": "string", "enum": ["user", "superadmin"], "description": "Role of the user (only p17325124424@student.poltekkesbandung.ac.id can be superadmin)" },
+        "currentStreak": { "type": "number", "description": "Current consecutive days streak" },
+        "bestStreak": { "type": "number", "description": "Best consecutive days streak" },
+        "totalStars": { "type": "number", "description": "Total stars accumulated" },
+        "totalSessions": { "type": "number", "description": "Total brushing sessions completed" },
+        "selectedToothbrushId": { "type": "string", "description": "Currently equipped toothbrush ID" },
+        "lastBrushedDate": { "type": "string", "description": "YYYY-MM-DD of last brushing session" },
+        "hasReadEducation": { "type": "boolean", "description": "Whether user has completed mandatory tips & offline guide" },
+        "lastReadEducationAt": { "type": "string", "description": "Timestamp when education was last read" },
+        "hasPassedQuiz": { "type": "boolean", "description": "Whether user has passed the interactive dental quiz" },
+        "quizScore": { "type": "number", "description": "Score achieved in the online dental quiz" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Account creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp" }
+      },
+      "required": ["userId", "email", "role", "currentStreak", "bestStreak", "totalStars", "totalSessions", "selectedToothbrushId"]
+    },
+    "BrushingRecord": {
+      "title": "BrushingRecord",
+      "description": "Daily brushing record for morning and night sessions",
+      "type": "object",
+      "properties": {
+        "date": { "type": "string", "description": "YYYY-MM-DD date key" },
+        "morning": { "type": "boolean", "description": "Whether morning session is completed" },
+        "morningTime": { "type": "string", "description": "Time string of morning session" },
+        "night": { "type": "boolean", "description": "Whether night session is completed" },
+        "nightTime": { "type": "string", "description": "Time string of night session" },
+        "durationSeconds": { "type": "number", "description": "Total duration in seconds brushed today" },
+        "starsEarned": { "type": "number", "description": "Stars earned today" },
+        "userId": { "type": "string", "description": "Owner user UID or account ID (e.g. ssga01)" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Update timestamp" }
+      },
+      "required": ["date", "morning", "night", "durationSeconds", "starsEarned", "userId"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Admin identity marker document restricted to p17325124424@student.poltekkesbandung.ac.id",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string", "description": "Admin email address" },
+        "role": { "type": "string", "enum": ["superadmin"], "description": "Super admin role" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Designation timestamp" }
+      },
+      "required": ["email", "role"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User profiles and aggregate brushing stats"
+    },
+    "/users/{userId}/records/{recordDate}": {
+      "schema": { "$ref": "#/entities/BrushingRecord" },
+      "description": "Daily morning and night brushing logs"
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminRecord" },
+      "description": "Admin role validation registry"
+    }
+  }
+}

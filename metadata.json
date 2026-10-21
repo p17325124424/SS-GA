@@ -1,0 +1,8 @@
+{
+  "name": "Remix STREAK SIKAT GIGI",
+  "description": "Aplikasi edukasi dan game sikat gigi interaktif 2 menit, pengingat sikat gigi offline 2x sehari, pelacak streak \u0026 hadiah stiker seru untuk anak dan keluarga.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
